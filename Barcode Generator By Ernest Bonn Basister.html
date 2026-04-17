@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barcode Generator</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ════════════════════════════════════════
+       RESET & TOKENS
+    ════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:        #0d0d0d;
+      --ink2:       #171717;
+      --ink3:       #222222;
+      --border:     #2c2c2c;
+      --border2:    #383838;
+      --paper:      #f2f0eb;
+      --paper2:     #d8d5ce;
+      --ghost:      #6a665e;
+      --accent:     #e8e4db;
+      --white:      #ffffff;
+      --danger:     #c0392b;
+      --success:    #27ae60;
+      --radius:     4px;
+      --mono:       'IBM Plex Mono', monospace;
+      --display:    'Bebas Neue', sans-serif;
+
+      /* print preset (updated by JS) */
+      --print-width: 58mm;
+    }
+
+    /* ════════════════════════════════════════
+       BASE
+    ════════════════════════════════════════ */
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--mono);
+      background: var(--ink);
+      color: var(--paper);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 18px 64px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ════════════════════════════════════════
+       HEADER
+    ════════════════════════════════════════ */
+    header {
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 18px;
+      position: relative;
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    h1 {
+      font-family: var(--display);
+      font-size: clamp(2rem, 8vw, 2.8rem);
+      letter-spacing: .06em;
+      color: var(--paper);
+      line-height: 1;
+      flex: 1;
+    }
+    .format-badge {
+      font-size: .6rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      background: var(--paper);
+      color: var(--ink);
+      padding: 3px 8px;
+      border-radius: 2px;
+      white-space: nowrap;
+      align-self: center;
+    }
+
+    /* Gear / settings toggle */
+    .gear-btn {
+      background: none;
+      border: 1px solid var(--border2);
+      color: var(--ghost);
+      padding: 7px 9px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      transition: color .18s, border-color .18s, background .18s;
+      align-self: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gear-btn:hover,
+    .gear-btn.active {
+      color: var(--paper);
+      border-color: var(--paper);
+      background: var(--ink3);
+    }
+    .gear-btn svg {
+      width: 16px; height: 16px;
+      fill: currentColor;
+      transition: transform .4s;
+    }
+    .gear-btn.active svg { transform: rotate(60deg); }
+
+    .tagline {
+      font-size: .68rem;
+      color: var(--ghost);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    /* ════════════════════════════════════════
+       SETTINGS DRAWER
+    ════════════════════════════════════════ */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 40;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .28s;
+    }
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0; right: 0;
+      height: 100%;
+      width: min(320px, 88vw);
+      background: var(--ink2);
+      border-left: 1px solid var(--border);
+      z-index: 50;
+      transform: translateX(100%);
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--ink2);
+      z-index: 1;
+    }
+    .drawer-title {
+      font-family: var(--display);
+      font-size: 1.4rem;
+      letter-spacing: .1em;
+      color: var(--paper);
+    }
+    .drawer-close {
+      background: none;
+      border: none;
+      color: var(--ghost);
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      line-height: 1;
+      border-radius: var(--radius);
+      transition: color .15s;
+    }
+    .drawer-close:hover { color: var(--paper); }
+
+    .drawer-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      flex: 1;
+    }
+
+    /* Setting section */
+    .setting-section { display: flex; flex-direction: column; gap: 12px; }
+    .setting-label {
+      font-size: .6rem;
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ghost);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+
+    /* Preset buttons */
+    .preset-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .preset-btn {
+      background: var(--ink3);
+      border: 1.5px solid var(--border2);
+      color: var(--paper2);
+      font-family: var(--mono);
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      padding: 12px 8px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: center;
+      transition: all .18s;
+      line-height: 1.3;
+    }
+    .preset-btn:hover { border-color: var(--paper2); color: var(--paper); }
+    .preset-btn.selected {
+      background: var(--paper);
+      color: var(--ink);
+      border-color: var(--paper);
+    }
+    .preset-btn small {
+      display: block;
+      font-size: .6rem;
+      opacity: .65;
+      margin-top: 2px;
+      letter-spacing: .04em;
+    }
+
+    /* Margin slider */
+    .slider-wrap { display: flex; flex-direction: column; gap: 8px; }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border2);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--paper);
+      cursor: pointer;
+      transition: transform .15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: none;
+      cursor: pointer;
+    }
+    .slider-value {
+      font-size: .75rem;
+      color: var(--paper);
+      min-width: 28px;
+      text-align: right;
+      letter-spacing: .03em;
+    }
+    .slider-desc {
+      font-size: .65rem;
+      color: var(--ghost);
+      letter-spacing: .04em;
+    }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .toggle-desc {
+      font-size: .78rem;
+      color: var(--paper2);
+      letter-spacing: .03em;
+      line-height: 1.4;
+    }
+    .toggle-desc small {
+      display: block;
+      font-size: .65rem;
+      color: var(--ghost);
+      margin-top: 2px;
+    }
+    .toggle {
+      position: relative;
+      width: 42px; height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border2);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .toggle input:checked + .toggle-track { background: var(--paper); }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      background: var(--ghost);
+      border-radius: 50%;
+      transition: transform .2s, background .2s;
+    }
+    .toggle input:checked + .toggle-track::after {
+      transform: translateX(18px);
+      background: var(--ink);
+    }
+
+    /* Drawer footer — reset button */
+    .drawer-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+    .btn-reset {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--ghost);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: 11px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all .18s;
+    }
+    .btn-reset:hover { border-color: var(--paper2); color: var(--paper2); }
+
+    /* ════════════════════════════════════════
+       MAIN CARD
+    ════════════════════════════════════════ */
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--ink2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: .62rem;
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ghost);
+      margin-bottom: 10px;
+    }
+
+    .input-wrap {
+      position: relative;
+      margin-bottom: 6px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 16px 42px 16px 14px;
+      font-family: var(--mono);
+      font-size: 1rem;
+      color: var(--paper);
+      background: var(--ink);
+      border: 1.5px solid var(--border2);
+      border-radius: var(--radius);
+      outline: none;
+      transition: border-color .18s;
+      letter-spacing: .04em;
+      -webkit-appearance: none;
+    }
+    input[type="text"]:focus { border-color: var(--paper); }
+    input[type="text"]::placeholder { color: #3a3a3a; }
+
+    .clear-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--ghost);
+      font-size: 1.15rem;
+      cursor: pointer;
+      padding: 5px 7px;
+      line-height: 1;
+      border-radius: 2px;
+      display: none;
+      transition: color .15s;
+    }
+    .clear-btn:hover { color: var(--paper); }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .char-count { font-size: .65rem; color: #3a3a3a; letter-spacing: .04em; }
+    .char-count.warn { color: var(--danger); }
+    .hint { font-size: .65rem; color: #2e2e2e; letter-spacing: .03em; }
+
+    /* ════════════════════════════════════════
+       ACTION BUTTONS
+    ════════════════════════════════════════ */
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    button {
+      font-family: var(--mono);
+      font-size: .82rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: var(--radius);
+      padding: 14px 10px;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s, background .18s;
+      line-height: 1;
+    }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .25; cursor: not-allowed; transform: none; }
+
+    .btn-generate {
+      background: var(--paper);
+      color: var(--ink);
+      grid-column: 1 / -1;
+      font-size: .9rem;
+      padding: 17px;
+    }
+    .btn-generate:not(:disabled):hover { background: var(--accent); }
+
+    .btn-secondary {
+      background: var(--ink3);
+      color: var(--paper);
+      border: 1px solid var(--border2);
+    }
+    .btn-secondary:not(:disabled):hover { border-color: var(--paper2); }
+
+    /* ════════════════════════════════════════
+       BARCODE OUTPUT
+    ════════════════════════════════════════ */
+    .output-section { margin-top: 22px; }
+
+    /* Status bar above barcode */
+    .status-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      font-size: .6rem;
+      color: var(--ghost);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .status-bar.visible { display: flex; }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      margin-right: 6px;
+      display: inline-block;
+    }
+    .status-left { display: flex; align-items: center; }
+
+    /* Barcode white card */
+    .barcode-wrap {
+      background: var(--white);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Anti-stretch fix: width 100%, height auto */
+    #barcode-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* Placeholder */
+    .bc-placeholder {
+      width: 100%;
+      padding: 40px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      background: var(--white);
+    }
+    .ph-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 52px;
+      opacity: .1;
+    }
+    .ph-bars span { background: #111; border-radius: 1px; }
+    .ph-label {
+      font-size: .65rem;
+      color: #aaa;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    /* Error banner */
+    .error-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(192,57,43,.12);
+      border: 1px solid rgba(192,57,43,.3);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-top: 10px;
+    }
+    .error-banner.visible { display: flex; }
+    .error-banner svg { flex-shrink: 0; }
+    .error-banner p {
+      font-size: .72rem;
+      color: #e57373;
+      letter-spacing: .03em;
+      line-height: 1.5;
+    }
+
+    /* ════════════════════════════════════════
+       TOAST
+    ════════════════════════════════════════ */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(70px);
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: .75rem;
+      letter-spacing: .06em;
+      padding: 10px 22px;
+      border-radius: 100px;
+      opacity: 0;
+      transition: transform .22s, opacity .22s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 200;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* ════════════════════════════════════════
+       BRAND CREDIT
+    ════════════════════════════════════════ */
+    .brand-credit {
+      margin-top: 32px;
+      font-size: .58rem;
+      color: #252525;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.6;
+      animation: brand-pulse 7s ease-in-out infinite;
+      user-select: none;
+      max-width: 380px;
+    }
+    @keyframes brand-pulse {
+      0%, 100% { opacity: .3; }
+      50%       { opacity: .75; }
+    }
+
+    /* ════════════════════════════════════════
+       THERMAL PRINT — @media print
+       Dynamic via CSS custom property --print-width
+       set by JS before window.print() is called.
+
+       Hides all UI. Centers barcode.
+       Aspect ratio preserved: width% + height:auto.
+       Works on 58 mm AND 80 mm rolls.
+    ════════════════════════════════════════ */
+    @media print {
+
+      @page {
+        /* JS writes var(--print-width) onto :root before printing */
+        size: var(--print-width) auto;
+        margin: 4mm 3mm;
+      }
+
+      /* Kill everything that isn't the barcode */
+      header,
+      .drawer,
+      .drawer-overlay,
+      .card > .field-label,
+      .card > .input-wrap,
+      .card > .meta-row,
+      .card > .btn-row,
+      .status-bar,
+      .error-banner,
+      .toast,
+      .brand-credit {
+        display: none !important;
+      }
+
+      html, body {
+        background: #fff !important;
+        color: #000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+        width: 100% !important;
+      }
+
+      .card {
+        border: none !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        padding: 0 !important;
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+
+      .output-section { margin: 0 !important; }
+
+      .bc-placeholder { display: none !important; }
+
+      .barcode-wrap {
+        background: #fff !important;
+        display: flex !important;
+        justify-content: center !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        /* padding comes from JS-controlled margin setting */
+      }
+
+      /*
+        Aspect-ratio lock for print:
+        max-width = paper printable width (set by JS on the element style).
+        height: auto → natural ratio, never squashes.
+      */
+      #barcode-svg {
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        max-width: var(--print-svg-max, 52mm) !important;
+        image-rendering: pixelated !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════ SETTINGS DRAWER OVERLAY ════════ -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+
+<!-- ════════ SETTINGS DRAWER ════════ -->
+<aside class="drawer" id="drawer" role="dialog" aria-label="Print Settings">
+  <div class="drawer-header">
+    <span class="drawer-title">Settings</span>
+    <button class="drawer-close" id="drawer-close" aria-label="Close settings">✕</button>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- Print Preset -->
+    <div class="setting-section">
+      <span class="setting-label">Print Preset</span>
+      <div class="preset-row">
+        <button class="preset-btn selected" data-preset="58mm" id="preset-58">
+          58 mm
+          <small>Standard thermal</small>
+        </button>
+        <button class="preset-btn" data-preset="80mm" id="preset-80">
+          80 mm
+          <small>Wide thermal</small>
+        </button>
+      </div>
+    </div>
+
+    <!-- Quiet Zone / Margin Slider -->
+    <div class="setting-section">
+      <span class="setting-label">Quiet Zone (Margin)</span>
+      <div class="slider-wrap">
+        <div class="slider-row">
+          <input type="range" id="margin-slider" min="0" max="40" step="2" value="10" />
+          <span class="slider-value" id="margin-val">10</span>
+        </div>
+        <span class="slider-desc">White space (px) around the barcode. Increase if printer crops edges.</span>
+      </div>
+    </div>
+
+    <!-- Show / Hide Text Toggle -->
+    <div class="setting-section">
+      <span class="setting-label">Human-Readable Text</span>
+      <div class="toggle-row">
+        <div class="toggle-desc">
+          Show text below barcode
+          <small>Disable for maximum bar height on narrow paper</small>
+        </div>
+        <label class="toggle" aria-label="Toggle human-readable text">
+          <input type="checkbox" id="text-toggle" checked />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Bar Height Slider -->
+    <div class="setting-section">
+      <span class="setting-label">Bar Height</span>
+      <div class="slider-wrap">
+        <div class="slider-row">
+          <input type="range" id="height-slider" min="40" max="160" step="4" value="72" />
+          <span class="slider-value" id="height-val">72</span>
+        </div>
+        <span class="slider-desc">Taller bars are easier to scan from further away.</span>
+      </div>
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <div class="drawer-footer">
+    <button class="btn-reset" id="btn-reset-settings">↺ Reset to Defaults</button>
+  </div>
+</aside>
+
+<!-- ════════ HEADER ════════ -->
+<header>
+  <div class="header-top">
+    <h1>Barcode</h1>
+    <span class="format-badge">CODE128</span>
+    <button class="gear-btn" id="gear-btn" aria-label="Open settings" title="Print Settings">
+      <!-- Gear SVG icon -->
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54A.484.484 0 0 0 14 2h-4a.484.484 0 0 0-.48.41l-.36 2.54a7.37 7.37 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.47a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.37 7.37 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 0 1 8.4 12 3.6 3.6 0 0 1 12 8.4 3.6 3.6 0 0 1 15.6 12 3.6 3.6 0 0 1 12 15.6z"/>
+      </svg>
+    </button>
+  </div>
+  <p class="tagline">Alphanumeric · Offline · Thermal-Ready · Non Profit  </p>
+</header>
+
+<!-- ════════ MAIN CARD ════════ -->
+<div class="card">
+
+  <label class="field-label" for="bc-input">Enter asset code or text</label>
+
+  <div class="input-wrap">
+    <input
+      type="text"
+      id="bc-input"
+      placeholder="e.g. HW-2024-A3X9 or any text…"
+      maxlength="80"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button class="clear-btn" id="btn-clear-inline" aria-label="Clear" tabindex="-1">×</button>
+  </div>
+
+  <div class="meta-row">
+    <span class="char-count" id="char-count">0 / 80</span>
+    <span class="hint" id="preset-hint">Preset: 58mm · Margin: 10 · Text: On</span>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-generate" id="btn-generate" disabled>⌁ Generate Barcode</button>
+    <button class="btn-secondary" id="btn-download" disabled>↓ SVG</button>
+    <button class="btn-secondary" id="btn-print"    disabled>⎙ Print</button>
+  </div>
+
+  <!-- Output -->
+  <div class="output-section">
+
+    <div class="status-bar" id="status-bar">
+      <span class="status-left">
+        <span class="status-dot"></span>
+        <span id="status-text">Ready</span>
+      </span>
+      <span id="status-preset-label">58mm</span>
+    </div>
+
+    <div class="barcode-wrap" id="barcode-wrap">
+      <!-- Placeholder -->
+      <div class="bc-placeholder" id="bc-placeholder">
+        <div class="ph-bars" aria-hidden="true">
+          <span style="width:2px;height:100%"></span><span style="width:4px;height:85%"></span>
+          <span style="width:2px;height:100%"></span><span style="width:6px;height:70%"></span>
+          <span style="width:2px;height:100%"></span><span style="width:3px;height:90%"></span>
+          <span style="width:5px;height:60%"></span><span style="width:2px;height:100%"></span>
+          <span style="width:4px;height:80%"></span><span style="width:2px;height:100%"></span>
+          <span style="width:3px;height:75%"></span><span style="width:5px;height:100%"></span>
+          <span style="width:2px;height:65%"></span><span style="width:4px;height:100%"></span>
+          <span style="width:2px;height:85%"></span><span style="width:6px;height:100%"></span>
+          <span style="width:2px;height:55%"></span><span style="width:3px;height:100%"></span>
+          <span style="width:2px;height:90%"></span><span style="width:5px;height:70%"></span>
+          <span style="width:2px;height:100%"></span>
+        </div>
+        <span class="ph-label">Barcode appears here</span>
+      </div>
+
+      <!-- Barcode renders here — width:100% height:auto = no stretch -->
+      <svg id="barcode-svg" style="display:none;"></svg>
+    </div>
+
+    <!-- Error banner -->
+    <div class="error-banner" id="error-banner">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="#e57373" stroke-width="2"/>
+        <line x1="12" y1="8" x2="12" y2="12" stroke="#e57373" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="16" r="1" fill="#e57373"/>
+      </svg>
+      <p id="error-text">Could not encode. CODE128 supports A–Z, 0–9, and common symbols. Remove unsupported characters and try again.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- Brand credit -->
+<p class="brand-credit">
+  Studio: Bonn's Tech Solution &nbsp;&middot;&nbsp; A Personal Project<br>
+  Develoer: Ernest Bonn Basister
+</p>
+
+<div class="toast" id="toast"></div>
+
+<!-- ════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ── Default settings ── */
+  const DEFAULTS = {
+    preset:      '58mm',
+    margin:      10,
+    showText:    true,
+    barHeight:   72,
+  };
+
+  /* ── State (loaded from localStorage or defaults) ── */
+  let S = loadSettings();
+
+  /* ── DOM refs ── */
+  const bcInput      = document.getElementById('bc-input');
+  const charCount    = document.getElementById('char-count');
+  const presetHint   = document.getElementById('preset-hint');
+  const btnGen       = document.getElementById('btn-generate');
+  const btnClearInl  = document.getElementById('btn-clear-inline');
+  const btnDl        = document.getElementById('btn-download');
+  const btnPrint     = document.getElementById('btn-print');
+  const bcSvg        = document.getElementById('barcode-svg');
+  const placeholder  = document.getElementById('bc-placeholder');
+  const errorBanner  = document.getElementById('error-banner');
+  const errorText    = document.getElementById('error-text');
+  const statusBar    = document.getElementById('status-bar');
+  const statusText   = document.getElementById('status-text');
+  const statusPreset = document.getElementById('status-preset-label');
+  const toast        = document.getElementById('toast');
+
+  const gearBtn      = document.getElementById('gear-btn');
+  const drawer       = document.getElementById('drawer');
+  const drawerOver   = document.getElementById('drawer-overlay');
+  const drawerClose  = document.getElementById('drawer-close');
+
+  const preset58     = document.getElementById('preset-58');
+  const preset80     = document.getElementById('preset-80');
+  const marginSlider = document.getElementById('margin-slider');
+  const marginVal    = document.getElementById('margin-val');
+  const textToggle   = document.getElementById('text-toggle');
+  const heightSlider = document.getElementById('height-slider');
+  const heightVal    = document.getElementById('height-val');
+  const btnReset     = document.getElementById('btn-reset-settings');
+
+  let hasBarcode = false;
+  let toastTimer = null;
+
+  /* ════════════════════
+     INIT
+  ════════════════════ */
+  function init() {
+    applySettingsToUI();
+    updateHint();
+  }
+
+  /* ════════════════════
+     SETTINGS PERSISTENCE
+  ════════════════════ */
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem('bc_settings');
+      if (raw) return Object.assign({}, DEFAULTS, JSON.parse(raw));
+    } catch (_) {}
+    return Object.assign({}, DEFAULTS);
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem('bc_settings', JSON.stringify(S)); } catch (_) {}
+  }
+
+  function applySettingsToUI() {
+    /* Preset buttons */
+    preset58.classList.toggle('selected', S.preset === '58mm');
+    preset80.classList.toggle('selected', S.preset === '80mm');
+    /* Sliders */
+    marginSlider.value = S.margin;
+    marginVal.textContent = S.margin;
+    heightSlider.value = S.barHeight;
+    heightVal.textContent = S.barHeight;
+    /* Toggle */
+    textToggle.checked = S.showText;
+  }
+
+  function updateHint() {
+    presetHint.textContent =
+      `Preset: ${S.preset} · Margin: ${S.margin} · Text: ${S.showText ? 'On' : 'Off'} · H: ${S.barHeight}`;
+    statusPreset.textContent = S.preset;
+  }
+
+  /* ════════════════════
+     DRAWER
+  ════════════════════ */
+  function openDrawer() {
+    drawer.classList.add('open');
+    drawerOver.classList.add('open');
+    gearBtn.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    drawerOver.classList.remove('open');
+    gearBtn.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  gearBtn.addEventListener('click', () =>
+    drawer.classList.contains('open') ? closeDrawer() : openDrawer());
+  drawerClose.addEventListener('click', closeDrawer);
+  drawerOver.addEventListener('click', closeDrawer);
+
+  /* Escape key closes drawer */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+  });
+
+  /* ── Preset buttons ── */
+  [preset58, preset80].forEach(btn => {
+    btn.addEventListener('click', () => {
+      S.preset = btn.dataset.preset;
+      preset58.classList.toggle('selected', S.preset === '58mm');
+      preset80.classList.toggle('selected', S.preset === '80mm');
+      saveSettings();
+      updateHint();
+      if (hasBarcode) regenerate();
+    });
+  });
+
+  /* ── Margin slider ── */
+  marginSlider.addEventListener('input', () => {
+    S.margin = parseInt(marginSlider.value, 10);
+    marginVal.textContent = S.margin;
+    saveSettings();
+    updateHint();
+    if (hasBarcode) regenerate();
+  });
+
+  /* ── Text toggle ── */
+  textToggle.addEventListener('change', () => {
+    S.showText = textToggle.checked;
+    saveSettings();
+    updateHint();
+    if (hasBarcode) regenerate();
+  });
+
+  /* ── Height slider ── */
+  heightSlider.addEventListener('input', () => {
+    S.barHeight = parseInt(heightSlider.value, 10);
+    heightVal.textContent = S.barHeight;
+    saveSettings();
+    updateHint();
+    if (hasBarcode) regenerate();
+  });
+
+  /* ── Reset ── */
+  btnReset.addEventListener('click', () => {
+    S = Object.assign({}, DEFAULTS);
+    saveSettings();
+    applySettingsToUI();
+    updateHint();
+    if (hasBarcode) regenerate();
+    showToast('Settings reset to defaults');
+  });
+
+  /* ════════════════════
+     INPUT
+  ════════════════════ */
+  bcInput.addEventListener('input', () => {
+    const len = bcInput.value.length;
+    charCount.textContent = `${len} / 80`;
+    charCount.classList.toggle('warn', len > 70);
+    btnGen.disabled = len === 0;
+    btnClearInl.style.display = len > 0 ? 'block' : 'none';
+    hideError();
+  });
+
+  bcInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') generate();
+  });
+
+  btnClearInl.addEventListener('click', clearAll);
+
+  /* ════════════════════
+     GENERATE
+  ════════════════════ */
+  btnGen.addEventListener('click', generate);
+
+  function generate() {
+    const text = bcInput.value.trim();
+    if (!text) return;
+    renderBarcode(text);
+  }
+
+  function regenerate() {
+    const text = bcInput.value.trim();
+    if (text && hasBarcode) renderBarcode(text);
+  }
+
+  function renderBarcode(text) {
+    hideError();
+
+    /* Validate: CODE128 supports ASCII 0–127, strip control chars */
+    if (/[^\x00-\x7F]/.test(text)) {
+      showError('CODE128 only supports ASCII characters (A–Z, 0–9, and common symbols). Remove non-ASCII characters and try again.');
+      return;
+    }
+
+    try {
+      JsBarcode(bcSvg, text, {
+        format:       'CODE128',
+        lineColor:    '#111111',
+        background:   '#ffffff',
+        width:        2,
+        height:       S.barHeight,
+        displayValue: S.showText,
+        font:         'IBM Plex Mono, monospace',
+        fontOptions:  '500',
+        fontSize:     13,
+        textMargin:   S.showText ? 6 : 0,
+        margin:       S.margin,
+      });
+
+      placeholder.style.display = 'none';
+      bcSvg.style.display       = 'block';
+      hasBarcode                = true;
+      btnDl.disabled            = false;
+      btnPrint.disabled         = false;
+
+      /* Status bar */
+      statusBar.classList.add('visible');
+      statusText.textContent = `CODE128 · ${text.length} chars`;
+
+      showToast('Barcode generated ✓');
+    } catch (err) {
+      showError('Could not encode this text. Check for unsupported characters.');
+      console.error('JsBarcode:', err);
+    }
+  }
+
+  /* ════════════════════
+     CLEAR
+  ════════════════════ */
+  function clearAll() {
+    bcInput.value             = '';
+    charCount.textContent     = '0 / 80';
+    charCount.classList.remove('warn');
+    btnGen.disabled           = true;
+    btnDl.disabled            = true;
+    btnPrint.disabled         = true;
+    btnClearInl.style.display = 'none';
+    bcSvg.style.display       = 'none';
+    placeholder.style.display = 'flex';
+    statusBar.classList.remove('visible');
+    hasBarcode                = false;
+    hideError();
+    bcInput.focus();
+  }
+
+  /* ════════════════════
+     DOWNLOAD SVG
+  ════════════════════ */
+  btnDl.addEventListener('click', () => {
+    if (!hasBarcode) return;
+    const s = new XMLSerializer();
+    let str = s.serializeToString(bcSvg);
+    if (!str.includes('xmlns='))
+      str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    const blob = new Blob([str], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'barcode.svg'; a.click();
+    URL.revokeObjectURL(url);
+    showToast('Saved as barcode.svg ✓');
+  });
+
+  /* ════════════════════
+     PRINT
+  ════════════════════ */
+  btnPrint.addEventListener('click', () => {
+    if (!hasBarcode) { showToast('Generate a barcode first.'); return; }
+
+    /*
+      Write CSS custom properties onto :root so @media print can read them.
+      --print-width   → used by @page size
+      --print-svg-max → used by #barcode-svg max-width
+    */
+    const printWidth = S.preset === '80mm' ? '80mm' : '58mm';
+    /* Safe printable width = paper - 2 × 3mm margin */
+    const svgMax     = S.preset === '80mm' ? '74mm' : '52mm';
+
+    document.documentElement.style.setProperty('--print-width',   printWidth);
+    document.documentElement.style.setProperty('--print-svg-max', svgMax);
+
+    window.print();
+  });
+
+  /* ════════════════════
+     ERROR / TOAST HELPERS
+  ════════════════════ */
+  function showError(msg) {
+    errorText.textContent     = msg;
+    errorBanner.classList.add('visible');
+    bcSvg.style.display       = 'none';
+    placeholder.style.display = 'flex';
+    hasBarcode                = false;
+    btnDl.disabled            = true;
+    btnPrint.disabled         = true;
+    statusBar.classList.remove('visible');
+  }
+  function hideError() {
+    errorBanner.classList.remove('visible');
+  }
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+  }
+
+  /* ── Kick off ── */
+  init();
+
+})();
+</script>
+</body>
+</html>
